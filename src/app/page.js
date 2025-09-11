@@ -1,103 +1,340 @@
-import Image from "next/image";
+'use client';
+
+import NoteCard from "@/components/Cards/NoteCard";
+import Navbar from "@/components/Navbar";
+import TagInput from "@/components/TagInput";
+import { useEffect, useState } from "react";
+import { MdAdd } from "react-icons/md";
+import Modal from "react-modal";
+import { useSelector } from "react-redux";
+import { useRouter } from "next/navigation";
+import axios from "axios";
+import toast from "react-hot-toast";
+import EmptyCard from "@/components/EmptyCared/EmptyCard";
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const router = useRouter();
+  const { user, loading } = useSelector((state) => state.user);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  const [userInfo, setUserInfo] = useState(null);
+  const [allNotes, setAllNotes] = useState([]);
+  const [openAddEditModel, setOpenAddEditModel] = useState({
+    isShown: false,
+    type: "add",
+    data: null,
+  });
+
+  const [content, setContent] = useState("");
+  const [tags, setTags] = useState([]);
+  const [title, setTitle] = useState("");
+  const [Error, setError] = useState(null);
+  const [isPinned, setIsPinned] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [isSearch, setIsSearch] = useState(false);
+
+  // Close modal
+  const onClose = () => {
+    setOpenAddEditModel({ isShown: false, type: "add", data: null });
+    setTags([]);
+    setTitle("");
+    setContent("");
+    setError(null);
+  };
+
+  // Edit note
+  const editNote = async () => {
+    try {
+      const res = await axios.put(
+        `/api/note/home/${openAddEditModel.data._id}`,
+        { title, content, tags, isPinned },
+        { withCredentials: true }
+      );
+
+      if (!res.data.success) {
+        setError(res.data.error);
+        return;
+      }
+
+   
+      setAllNotes((prevNotes) =>
+        prevNotes.map((note) =>
+          note._id === res.data.note._id ? res.data.note : note
+        )
+      );
+
+      toast.success("Note updated successfully");
+      onClose();
+    } catch (error) {
+      toast.error("Note not updated");
+    }
+  };
+
+  // Add new note
+  const addNewNote = async () => {
+    try {
+      const res = await axios.post(
+        "/api/note/home",
+        { title, content, tags },
+        { withCredentials: true }
+      );
+
+      if (!res.data.success) {
+        setError(res.data.message);
+        return;
+      }
+
+      getAllNotes(user._id);
+      onClose();
+      toast.success("Note added successfully");
+    } catch (error) {
+      toast.error("Note not added");
+    }
+  };
+
+  // Delete note
+  const deleteNote = async (data) => {
+    const noteId = data._id;
+
+    try {
+      const res = await axios.delete(`/api/note/home/${noteId}`, {
+        withCredentials: true,
+      });
+
+      if (!res.data.success) {
+        toast.error("Note not deleted");
+        return;
+      }
+
+      toast.success("Note deleted successfully");
+      getAllNotes(user._id);
+    } catch (error) {
+      toast.error("Note not deleted");
+    }
+  };
+
+  // Add / Update note handler
+  const handleAddNote = () => {
+    if (!title) {
+      setError("Please enter the title");
+      return;
+    }
+    if (!content) {
+      setError("Please enter the content");
+      return;
+    }
+    setError("");
+    if (openAddEditModel.type === "edit") {
+      editNote();
+    } else {
+      addNewNote();
+    }
+  };
+
+  // Edit note modal
+  const handleEdit = (noteDetails) => {
+    setOpenAddEditModel({ isShown: true, data: noteDetails, type: "edit" });
+    setTitle(noteDetails.title);
+    setContent(noteDetails.content);
+    setTags(noteDetails.tags || []);
+    setIsPinned(noteDetails.isPinned || false);
+  };
+
+  // Fetch all notes (with optional search query)
+const getAllNotes = async (userId, query = "") => {
+  try {
+    const url = query
+      ? `/api/note/home?query=${encodeURIComponent(query)}`
+      : "/api/note/home";
+
+    const res = await axios.get(url, { withCredentials: true }); 
+
+    if (res.data.success) {
+      const sortedNotes = res.data.notes.sort((a, b) => b.isPinned - a.isPinned);
+      setAllNotes(sortedNotes);
+    }
+  } catch (err) {
+    console.error("Error fetching notes:", err.message);
+
+    if (err.response?.status === 401) {
+   
+      router.push("/login");
+    }
+  }
+};
+
+
+  // Handle search
+  const handleSearchNotes = (query) => {
+    if (query.trim()) {
+      setIsSearch(true);
+      getAllNotes(user._id, query);
+    } else {
+      setIsSearch(false);
+      getAllNotes(user._id);
+    }
+  };
+
+  const updateIsPinned = async (noteData) => {
+    try {
+      const res = await axios.put(
+        `/api/note/home/${noteData._id}`,
+        { ...noteData, isPinned: !noteData.isPinned },
+        { withCredentials: true }
+      );
+
+      if (!res.data.success) {
+        toast.error("Not pinned, something went wrong");
+        return;
+      }
+
+      toast.success(noteData.isPinned ? "Unpinned successfully" : "Pinned successfully");
+      getAllNotes(user._id);
+    } catch (error) {
+      console.log(error.message);
+    }
+  };
+
+  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (mounted) {
+      if (!user) {
+        router.push("/login");
+      } else {
+        setUserInfo(user);
+        getAllNotes(user._id);
+      }
+    }
+  }, [mounted, user, router]);
+
+  if (!mounted) return null; // Prevent hydration mismatch
+  if (loading) return <p className="text-center text-pink-900">Loading...</p>;
+  if (!user) return null; // Redirect handled in useEffect
+
+  return (
+    <>
+      <div className="bg-[linear-gradient(135deg,theme(colors.pink.600),theme(colors.pink.400))] min-h-screen">
+        <Navbar userInfo={userInfo} onSearch={handleSearchNotes} />
+
+        <div className="container mx-auto p-4">
+          {allNotes.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4 mt-8 max-md:mt-5 pb-20">
+              {allNotes.map((note) => (
+                <NoteCard
+                  key={note._id}
+                  title={note.title}
+                  date={note.createdAt?.slice(0, 10)}
+                  content={note.content}
+                  tags={note.tags}
+                  isPinned={note.isPinned}
+                  onEdit={() => handleEdit(note)}
+                  onDelete={() => deleteNote(note)}
+                  onPinNote={() => updateIsPinned(note)}
+                />
+              ))}
+            </div>
+          ) : isSearch ? (
+            <EmptyCard
+              imgSrc="https://cdn-icons-png.flaticon.com/512/7486/7486764.png"
+              message="Oops! No note found"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+          ) : (
+            <EmptyCard
+              imgSrc="https://imgs.search.brave.com/pUe5B5Xard0u5zam-QQZvsCQv5rOMvP2e3a1OdM2120/rs:fit:500:0:1:0/g:ce/aHR0cHM6Ly90aHVt/YnMuZHJlYW1zdGlt/ZS5jb20vYi9ub3Rl/LXBhcGVyLTI3MTQx/MjUuanBn"
+              message="Ready to capture your ideas? Click the 'Add' button to start noting down your thoughts, inspiration and reminders. Let's get started!."
+            />
+          )}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+      </div>
+
+      {/* Floating Add Button */}
+      <button
+        className="w-16 h-16 flex items-center justify-center rounded-2xl bg-green-600 hover:bg-green-700 cursor-pointer fixed right-10 bottom-10"
+        onClick={() =>
+          setOpenAddEditModel({ isShown: true, type: "add", data: null })
+        }
+      >
+        <MdAdd className="text-[32px] text-white" />
+      </button>
+
+      {/* Modal */}
+      <Modal
+        isOpen={openAddEditModel.isShown}
+        onRequestClose={onClose}
+        contentLabel="Add/Edit Note Modal"
+        ariaHideApp={false}
+        className="w-[40%] max-md:w-[60%] max-sm:w-[70%] max-h-3/4"
+        style={{
+          overlay: {
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 50,
+          },
+          content: {
+            position: "relative",
+            inset: "auto",
+            padding: "1.5rem",
+            borderRadius: "1rem",
+            width: "100%",
+            maxWidth: "60%",
+            height: "auto",
+            maxHeight: "80vh",
+            overflowY: "auto",
+            backgroundColor: "rgb(210, 130, 144)",
+          },
+        }}
+      >
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl md:text-2xl font-bold text-pink-900">
+            Add/Edit Note
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-pink-900 text-2xl md:text-3xl font-bold hover:text-red-800 cursor-pointer"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <input
+            type="text"
+            placeholder="Title..."
+            className="p-2 border border-white rounded focus:outline-none focus:ring-1 focus:ring-pink-400 w-full text-sm md:text-base text-pink-950 placeholder-gray-200"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
+          <textarea
+            placeholder="Content..."
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            className="p-2 border rounded focus:outline-none focus:ring-1 focus:ring-pink-400 w-full text-sm md:text-base placeholder-gray-200 text-pink-950 border-white"
+            rows={5}
           />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+          <TagInput tags={tags} setTags={setTags} />
+        </div>
+
+        {Error && <p className="text-red-600 text-s pt-4">{Error}</p>}
+
+        <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-red-500 rounded hover:bg-red-600 w-full sm:w-auto cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 w-full sm:w-auto cursor-pointer"
+            onClick={handleAddNote}
+          >
+            {openAddEditModel.type === "edit" ? "Update" : "Add"}
+          </button>
+        </div>
+      </Modal>
+    </>
   );
 }
+
+
