@@ -1,4 +1,4 @@
-// /helpers/mailer.js
+
 import nodemailer from "nodemailer";
 import User from "@/models/userModel.js";
 

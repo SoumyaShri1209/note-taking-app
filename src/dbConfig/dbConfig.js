@@ -1,4 +1,4 @@
-// src/dbConfig/dbConfig.js
+
 import mongoose from "mongoose";
 
 const MONGO_URI = process.env.MONGO_URI; 
