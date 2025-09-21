@@ -16,8 +16,8 @@ Easily create, edit, pin, delete, and search notes with a clean user interface.
 ---
 
 ## 🌐 Live Demo
-👉 [View Live Demo](https://your-live-demo-link.vercel.app)  
-*(Replace with your deployed link, e.g. Vercel)*
+👉 [Note Taking App](https://note-taking-app-nine-hazel.vercel.app)
+
 
 ---
 
